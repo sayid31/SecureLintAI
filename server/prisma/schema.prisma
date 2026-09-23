@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// One run of the auditor: the submitted code + overall verdict.
+model AuditSession {
+  id              String          @id @default(cuid())
+  language        String
+  provider        String
+  code            String          @db.Text
+  securityScore   Int
+  issueCount      Int             @default(0)
+  createdAt       DateTime        @default(now())
+  vulnerabilities Vulnerability[]
+
+  @@index([createdAt])
+}
+
+/// A single line-specific finding produced by the AI provider.
+model Vulnerability {
+  id           String       @id @default(cuid())
+  sessionId    String
+  session      AuditSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ruleId       String
+  message      String       @db.Text
+  line         Int
+  column       Int?
+  endLine      Int?
+  severity     Severity
+  /// OWASP category, e.g. "A03:2021 - Injection"
+  category     String
+  snippet      String?      @db.Text
+  suggestedFix String?      @db.Text
+  createdAt    DateTime     @default(now())
+
+  @@index([sessionId])
+  @@index([severity])
+}
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}

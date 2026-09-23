@@ -33,6 +33,7 @@ const LANGUAGES: { value: Language; label: string }[] = [
 ];
 
 const PROVIDERS: { value: Provider; label: string }[] = [
+  { value: "mock", label: "Mock (Dummy AI)" },
   { value: "openai", label: "OpenAI" },
   { value: "claude", label: "Claude" },
 ];
@@ -40,7 +41,7 @@ const PROVIDERS: { value: Provider; label: string }[] = [
 export default function App() {
   const [code, setCode] = useState(SAMPLE_CODE);
   const [language, setLanguage] = useState<Language>("javascript");
-  const [provider, setProvider] = useState<Provider>("openai");
+  const [provider, setProvider] = useState<Provider>("mock");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -168,7 +169,8 @@ export default function App() {
               {loading ? "Menganalisis…" : "Jalankan Audit"}
             </button>
             <span className="w-full text-[11px] text-slate-500 sm:w-auto">
-              Ctrl+Enter di editor · kedua provider → mock di MVP
+              Ctrl+Enter di editor · Mock default; OpenAI/Claude → mock bila
+              key kosong
             </span>
           </div>
 

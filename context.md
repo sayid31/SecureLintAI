@@ -1,7 +1,7 @@
 # SecureLint AI — Context / Memory
 
 > File ini adalah memori proyek. Baca dulu sebelum melanjutkan kerja agar konteks tidak hilang antar sesi.
-> Terakhir diperbarui: 2026-09-23 (update setelah DB end-to-end lulus + frontend scaffolded)
+> Terakhir diperbarui: 2026-09-23 (update keenam: dev satu perintah `npm run dev` — sebelumnya: provider `mock` eksplisit default untuk test)
 
 ---
 
@@ -11,13 +11,13 @@
 
 - **Frontend:** React (Vite) + Tailwind CSS + Monaco Editor (`@monaco-editor/react`) + Recharts — ✅ **scaffolded di `/client` & teruji** (typecheck, build, dev server, proxy API)
 - **Backend:** Node.js + TypeScript + Express + Prisma (PostgreSQL) — ✅ selesai & terverifikasi end-to-end
-- **AI:** Provider interface dengan Mock keyword scanner (MVP), ke depan bisa swap ke OpenAI/Claude
+- **AI:** **OpenAI & Claude ASLI** (via API key di `.env`) dengan **otomatis fallback ke mock keyword scanner** kalau key kosong / API error — `session.provider` di DB selalu jujur (mock bila hasil mock). ⚠️ Key belum diisi & user menunda → untuk test sekarang pakai **`mock` eksplisit** (default dropdown UI)
 
 ### Fitur MVP
 
 1. Monaco Editor untuk paste/edit kode (JS/TS/Python).
-2. Backend `POST /api/audit` menerima `{ code: string, language: string, provider: 'openai' | 'claude' }`.
-3. Mock AI Service: scan keyword (`eval()`, SQL concat, `password =`, `dangerouslySetInnerHTML`, dll) → anotasi vulnerability per-baris dalam format JSON ketat.
+2. Backend `POST /api/audit` menerima `{ code: string, language: string, provider: 'openai' | 'claude' | 'mock' }` — `mock` = AI dummy untuk test (default UI).
+3. AI service: LLM asli (OpenAI/Anthropic) ATAU mock keyword scanner (`eval()`, SQL concat, `password =`, `dangerouslySetInnerHTML`, dll) → anotasi vulnerability per-baris dalam format JSON ketat (validasi Zod).
 4. Penyimpanan DB (Prisma + PostgreSQL): Audit Sessions + Vulnerability items.
 5. Dashboard interaktif Recharts: Security Score, OWASP Issue Breakdown, inline code diff fix recommendations.
 
@@ -27,54 +27,57 @@
 
 | Topik | Keputusan |
 |---|---|
-| Database dev | **1 container Postgres dipakai bersama** (banyak database terpisah per project) — sebelumnya Docker Compose, sudah dihapus; DB `securelint` dibuat di container existing `server` (WSL Ubuntu, port 5432) |
+| Database dev | **1 container Postgres dipakai bersama** (banyak database terpisah per project) — Docker Compose dihapus; DB `securelint` dibuat di container existing `server` (WSL Ubuntu, port 5432) |
 | Host DB dari Windows | **`127.0.0.1`** (bukan `localhost`) — forwarding WSL2→Windows hanya IPv4, `localhost` bisa resolve ke `::1` → Prisma `P1001` |
 | Urutan kerja | **Backend dulu** → frontend menyusul setelah API solid |
-| Provider AI | Interface `AuditProvider` sudah didefinisikan; `openai`/`claude` **fall back ke mock** di MVP — tinggal ganti mapping di factory |
-| Skor keamanan | `100 - Σ(severity penalty)`, clamp 0–100. Penalty: CRITICAL 25, HIGH 15, MEDIUM 8, LOW 3, INFO 1 |
+| Provider AI | **LLM asli + fallback otomatis ke mock** — `getProvider()` membungkus primary dengan `FallbackProvider`; kalau key kosong/401/timeout/JSON invalid → mock, dan `provider.name` getter melaporkan nama jujur (`mock`) yang dibaca service SETELAH `audit()` |
+| Skor keamanan | `100 - Σ(severity penalty)`, clamp 0–100. Penalty: CRITICAL 25, HIGH 15, MEDIUM 8, LOW 3, INFO 1 — **satu sumber**: `server/src/services/ai/scoring.ts` (dipakai mock + LLM) |
+| npm audit | **Pakai `overrides`** — `deepmerge-ts ^8.0.2` (server) & `dompurify ^3.4.15` (client); keduanya dipin exact oleh parent → `npm audit fix` tidak bisa menembus. **Hasil: 0 vulnerabilities kedua package** ✅ (Prisma CLI divalidasi tetap jalan setelah override) |
+| Prisma config | **`server/prisma.config.ts`** menggantikan `package.json#prisma` (deprecated Prisma 7). ⚠️ Efek samping: Prisma berhenti auto-load `.env` → `import "dotenv/config"` ditambahkan di config & di `src/index.ts` |
+| Env runtime | Server **wajib `dotenv`** (dulu tidak ada → API key tak terbaca) |
+| Version control | **`git init` SUDAH JALAN** — commit pertama `b166398` (39 file). `.env`/`node_modules`/`dist` ter-ignore |
 | Bahasa respons user | User berkomunikasi dalam **Bahasa Indonesia** — balas dalam Bahasa Indonesia |
 
 ---
 
-## 3. Struktur Proyek (status: backend ✅ + frontend ✅ teruji, tinggal polish/opsional)
+## 3. Struktur Proyek (status: SEMUA MVP SELESAI)
 
 ```
-SecureLint AI/                     ← working dir, BUKAN git repo
+SecureLint AI/                     ← git repo (commit b166398)
 ├── context.md                     ← file ini
-├── README.md                      # setup + API docs + tabel rules
+├── package.json                   # ← root dev runner: `npm run dev` (concurrently)
+├── package-lock.json
+├── README.md                      # setup + API docs + tabel rules + AI provider env
 ├── .gitignore                     # node_modules, dist, .env, *.log
-├── client/                        # ✅ SUDAH DIBUAT & TERUJI (Vite + React 19 + Tailwind 4)
-│   ├── package.json               # scripts: dev, build (tsc + vite), typecheck, preview
-│   ├── vite.config.ts             # proxy /api → 127.0.0.1:4000 (hindari CORS), port 5173
-│   ├── tsconfig.json              # strict, noEmit, bundler resolution
-│   ├── index.html                 # lang="id", judul SecureLint AI
+├── client/                        # ✅ React 19 + Vite 7 + Tailwind 4 (0 npm vulns)
+│   ├── package.json               # scripts: dev/build/typecheck; overrides: dompurify ^3.4.15
+│   ├── vite.config.ts             # proxy /api → 127.0.0.1:4000, port 5173, manualChunks
+│   ├── tsconfig.json / index.html
 │   └── src/
-│       ├── main.tsx               # React 19 createRoot + StrictMode
-│       ├── index.css              # @import "tailwindcss" (Tailwind v4 via @tailwindcss/vite)
-│       ├── App.tsx                # layout dashboard, state, aksi runAudit/selectHistory
-│       ├── api.ts                 # tipe API + fetch client + SEVERITY_META + scoreColor
-│       └── components/
-│           ├── CodeEditor.tsx     # Monaco; Ctrl/Cmd+Enter via editor.addCommand (onMount)
-│           ├── ScoreGauge.tsx     # donut SVG 0–100, warna hijau/amber/merah
-│           ├── OwaspBreakdown.tsx # Recharts Pie per kategori OWASP, warna severity mayoritas
-│           ├── FindingList.tsx    # kartu finding per-baris, accordion buka snippet + diff
-│           ├── DiffPanel.tsx      # diff side-by-side merah/hijau + tombol salin fix
-│           └── HistoryList.tsx    # GET /api/audits, klik → muat session
-└── server/                        # ✅ SUDAH SELESAI & TERVERIFIKASI (termasuk test end-to-end DB)
-    ├── .env / .env.example        # DATABASE_URL, PORT=4000, CLIENT_ORIGIN, AI_PROVIDER
-    ├── package.json               # scripts: dev (tsx watch), build, prisma:*
-    ├── tsconfig.json              # CommonJS, strict, outDir dist, rootDir src
-    ├── prisma/schema.prisma
+│       ├── main.tsx / index.css / App.tsx / api.ts
+│       └── components/            # CodeEditor, ScoreGauge, OwaspBreakdown,
+│                                  # FindingList, DiffPanel, HistoryList
+└── server/                        # ✅ Express + TS + Prisma (0 npm vulns)
+    ├── .env / .env.example        # DATABASE_URL(127.0.0.1), PORT, CLIENT_ORIGIN,
+    │                              # OPENAI_API_KEY/MODEL, ANTHROPIC_API_KEY/MODEL
+    ├── package.json               # scripts dev/build/prisma:*; overrides: deepmerge-ts ^8.0.2
+    ├── prisma.config.ts           # ← pengganti package.json#prisma; import "dotenv/config" WAJIB
+    ├── prisma/schema.prisma + migrations/20260923032358_init
     └── src/
-        ├── index.ts               # listen PORT 4000
+        ├── index.ts               # import "dotenv/config" PERTAMA → listen PORT 4000
         ├── app.ts                 # express + cors + json + health + 404/error handler
+        │                          # (error handler hormati err.statusCode — bug 500 diperbaiki)
         ├── routes/audit.routes.ts
         ├── controllers/audit.controller.ts   # validasi Zod
         ├── services/audit.service.ts         # runAudit / getAuditById / listAudits
         ├── services/ai/
         │   ├── types.ts           # kontrak ketat: AuditProvider, AuditResult, AuditFinding
-        │   ├── mock.provider.ts   # 7 rules, line-specific
-        │   └── index.ts           # getProvider() factory
+        │   ├── scoring.ts         # SEVERITY_PENALTY + computeSecurityScore (SHARED)
+        │   ├── mock.provider.ts   # 7 rules, line-specific (pakai scoring.ts)
+        │   ├── llm.shared.ts      # SYSTEM_PROMPT + extractJson + Zod normalizeResult
+        │   ├── openai.provider.ts # Chat Completions (gpt-4o-mini), response_format json
+        │   ├── claude.provider.ts # Messages API (claude-sonnet-4-5)
+        │   └── index.ts           # getProvider() + FallbackProvider (honest name)
         └── lib/prisma.ts
 ```
 
@@ -93,16 +96,16 @@ SecureLint AI/                     ← working dir, BUKAN git repo
 | Method | Route | Keterangan |
 |---|---|---|
 | POST | `/api/audit` | Body `{ code, language, provider }` — validasi Zod, 400 jika invalid, 201 + session lengkap jika sukses |
-| GET | `/api/audits` | List 20 session terbaru (bonus, di luar spesifikasi awal) |
+| GET | `/api/audits` | List 20 session terbaru |
 | GET | `/api/audits/:id` | Session + vulnerabilities terurut per line; 404 jika tidak ada |
 | GET | `/api/health` | `{ status: "ok", service: "securelint-ai" }` |
 
 - `language`: `javascript | typescript | python`
-- `provider`: `openai | claude` (keduanya resolve ke mock di MVP)
+- `provider`: `openai | claude | mock` — **`mock` = AI dummy, pilihan default UI untuk test** (ditambahkan 2026-09-23; sebelumnya `mock` by design = 400 → **keputusan berubah**). `openai`/`claude` tanpa key → fallback otomatis ke mock, **di DB**: `mock` (lihat §2 Provider AI)
 
 ---
 
-## 6. Mock AI Rules
+## 6. Mock AI Rules (fallback scanner)
 
 | Rule | Severity | Deteksi | OWASP |
 |---|---|---|---|
@@ -115,32 +118,50 @@ SecureLint AI/                     ← working dir, BUKAN git repo
 | SL-007 | LOW | `console.log/debug/info` | A04 Insecure Design |
 
 Sebagian rule punya `buildFix` → diisi ke field `suggestedFix` untuk diff rekomendasi di frontend.
+LLM asli memakai prompt di `llm.shared.ts` (ruleId `AI-xxx`, kategori OWASP 2021, skor dihitung ulang oleh `scoring.ts` supaya konsisten).
 
 ---
 
-## 7. Status Verifikasi (2026-09-23 — update kedua)
+## 7. Status Verifikasi (2026-09-23 — update keenam: dev satu perintah)
 
-**Terverifikasi end-to-end (DB hidup):**
-- ✅ Docker **ada di WSL Ubuntu** (bukan Docker Desktop): Docker 29.7.1 + Compose v5.3.1, `dockerd` aktif
-- ✅ Database `securelint` dibuat di container existing `server` (postgres:15-alpine, port 5432)
-- ✅ `npx prisma migrate dev --name init` **sukses** → tabel `AuditSession`, `Vulnerability`, `_prisma_migrations` + enum `Severity` + index lengkap
-- ✅ `npx prisma migrate status` → *Database schema is up to date*
-- ✅ `npx tsc --noEmit` bersih
-- ✅ Smoke test API penuh: health 200, `POST /api/audit` valid **201** (data masuk & terbaca dari DB), invalid body/language **400** + detail Zod, `GET /api/audits` 200, `GET /api/audits/:id` 200, 404 route 404
-- ✅ **Bug diperbaiki:** error handler `app.ts` selalu balas 500 → sekarang hormati `err.statusCode` (JSON malformed = 400)
+**Update keenam (2026-09-23 — root dev runner):**
+- ✅ `package.json` root dibuat: `npm run dev` → `concurrently -n server,client --kill-others-on-fail "npm --prefix server run dev" "npm --prefix client run dev"` (+ `dev:server`, `dev:client`, `build`, `typecheck`); devDep `concurrently@9` (25 packages, 0 vulns)
+- ✅ Bug ditemukan & diperbaiki: flag `--default-target-terminal` **tanpa value mengonsumsi argumen pertama** → command `[server]` menjalankan client & backend tidak start. Dihapus → normal
+- ✅ Test E2E satu perintah: backend `listening :4000` + Vite `ready :5173` bersamaan; via proxy `localhost:5173`: health OK, `POST /api/audit` **201** (mock, score 32), `GET /api/audits` OK
+- ⚠️ Vite ternyata listen **IPv4-only tidak ada — hanya `::1`** → `http://127.0.0.1:5173` gagal, `http://localhost:5173` OK (buka yang ini)
+- 📝 README: section "Dev — satu perintah" ditambahkan
+- ✅ **Fix console error 404:** `index.html` tidak punya icon → browser minta `/favicon.ico` (404). Dibuat `client/public/favicon.svg` (shield emerald) + `<link rel="icon">` → verified 200, console bersih
+- ⚠️ Tool browser OpenCode **tetap belum connect** di sesi ini (`browser.disconnected` — perlu desktop app + experimental setting) → verifikasi visual via browser manual di `http://localhost:5173`
 
-**Frontend (update ketiga):**
-- ✅ `client/` scaffolded manual (tanpa create-vite): React 19.3 + Vite 7.3 + Tailwind 4.3 + @monaco-editor/react 4.7 + Recharts 3.10
-- ✅ `npm install` OK (128 packages); `tsc --noEmit` bersih; `npm run build` sukses (dist/ 594 kB JS — Monaco+Recharts, belum di-split)
-- ✅ Dev server Vite jalan di **5173**; proxy `/api` → backend teruji: `GET /api/health` 200 & `POST /api/audit` **201** lewat 5173
-- ✅ Fitur MVP terpasang: editor Monaco + pilihan bahasa/provider, tombol Audit (Ctrl+Enter), score gauge, hitungan severity, pie OWASP, finding accordion + diff sebelum/sesudah + salin fix, riwayat (klik → muat session)
-- ⚠️ Catatan: `onKeyDown` TIDAK ADA di @monaco-editor/react → pakai `onMount` + `editor.addCommand(CtrlCmd+Enter)`
-- ⚠️ Belum terverifikasi visual di browser (tool browser OpenCode belum connect di sesi ini)
+**Update kelima (2026-09-23 — provider mock eksplisit):**
+- ✅ Keputusan user: **aktivasi LLM asli (TODO 2) ditunda** — API key belum bisa diisi, test pakai AI dummy saja
+- ✅ Controller: `provider: z.enum(["openai", "claude", "mock"])` — sebelumnya `mock` = 400 by design, **keputusan berubah** (user pilih "Mock eksplisit")
+- ✅ Frontend: tipe `Provider` di `api.ts` + dropdown `App.tsx` dapat opsi **"Mock (Dummy AI)"**, jadi **default**; hint di bawah tombol Audit disesuaikan
+- ✅ README: dokumentasi enum `provider` diperbarui
+- ✅ Test E2E: `mock` → 201 recorded `mock`; `openai`/`claude` (key kosong) → fallback recorded `mock`; `gpt5` (invalid) → 400; `GET /api/audits` OK (session masuk)
+- ✅ `npx tsc --noEmit` server & `npm run typecheck` client bersih
 
-**Bekas/known issues:**
-- ⚠️ 3 high-severity npm vulnerabilities di **server** + 1 low + 1 moderate di **client** (dompurify via monaco-editor — belum ada patch rilis)
-- ⚠️ Prisma warning deprecated: `package.json#prisma` seed config akan dihapus di Prisma 7 → ke depan migrasi ke `prisma.config.ts`
-- ⚠️ `docker-compose.yml` **sudah dihapus** (user pilih strategi 1 container banyak database)
+**Update keempat (hardening + opsional selesai):**
+- ✅ **npm audit: 0 vulnerabilities** di server & client (via `overrides`: deepmerge-ts 8.0.2, dompurify 3.4.15) — Prisma CLI (`validate`/`migrate status`/`generate`) divalidasi tetap jalan setelah override
+- ✅ **`prisma.config.ts`** dibuat + `package.json#prisma` dihapus → warning deprecated Prisma 7 hilang; `dotenv/config` ditambahkan di config karena Prisma berhenti auto-load `.env` (diuji: `injected env (8) dari .env`, schema valid, migrasi up to date)
+- ✅ **`dotenv`** ditambahkan ke server + `import "dotenv/config"` di `src/index.ts` (API key akhirnya terbaca)
+- ✅ **Provider AI asli**: `openai.provider.ts` (gpt-4o-mini) + `claude.provider.ts` (claude-sonnet-4-5) + shared `scoring.ts` + `llm.shared.ts` (prompt ketat, `extractJson`, Zod normalize) + `FallbackProvider` di factory
+- ✅ **Test E2E fallback**:
+  - key kosong → 201, log `[ai] openai gagal (OPENAI_API_KEY belum di-set) → fallback ke mock`, DB `provider=mock`
+  - key dummy → API OpenAI **nyata balas 401** → catch → fallback → `RESULT name=mock` (path runtime error teruji, jaringan keluar OK)
+  - `provider=mock` di body → 400 (Zod by design) — ⚠️ **sudah tidak berlaku**, lihat Update kelima
+- ✅ **Code-split client**: index 226 kB (dari 594), recharts 343, monaco 22 + workers terpisah
+- ✅ **`git init` + commit pertama `b166398`** (39 file; `.env`/node_modules/dist ter-verify tidak ikut)
+- ✅ `npx tsc --noEmit` server & `npm run typecheck` client bersih setelah semua perubahan
+
+**Update sebelumnya (tetap berlaku):**
+- ✅ Docker di WSL Ubuntu; DB `securelint` di container `server`; migrate sukses; smoke test API penuh (201/400/404/200)
+- ✅ Bug error handler 500→400 diperbaiki; frontend scaffolded & teruji; proxy Vite→backend OK
+
+**Sisa known issues (minor):**
+- ⚠️ Belum verifikasi visual di browser (tool browser OpenCode tidak connect — buka manual `http://localhost:5173`)
+- ⚠️ `docker-compose.yml` sudah dihapus (keputusan user: 1 container banyak database)
+- ⚠️ Belum `git push` ke remote (belum ada remote)
 
 ---
 
@@ -148,30 +169,39 @@ Sebagian rule punya `buildFix` → diisi ke field `suggestedFix` untuk diff reko
 
 - **OS:** Windows (PowerShell), path kerja: `C:\Users\Muhamad Sayid\Documents\SecureLint AI`
 - Node v22.18.0, npm 10.9.3
-- **Docker: terinstall DI WSL Ubuntu** (bukan Docker Desktop) — akses dari PowerShell via `wsl -d Ubuntu -- docker ...`
+- **Git:** repo aktif, config global `Sayid_Dev31 <muhamadsayidamanulloh@gmail.com>`, commit `b166398`
+- **Docker: terinstall DI WSL Ubuntu** (bukan Docker Desktop) — akses via `wsl -d Ubuntu -- docker ...`
   - Container `server` = postgres:15-alpine, port `0.0.0.0:5432`, restart `unless-stopped`, volume `server_pgdata`
   - Kredensial: user `admin` / password `supersecretpassword`
-  - Database di 1 container itu: `admin`, `ecommerce_db`, `postgres`, **`securelint`** (project ini) — project lain (`ecommerce_postgres` di 5434, `postgres` container, `portainer`) jangan disentuh
+  - Database di 1 container itu: `admin`, `ecommerce_db`, `postgres`, **`securelint`** (project ini) — project lain (`ecommerce_postgres` di 5434, `postgres`, `portainer`) jangan disentuh
   - Dari Windows: `wsl -d Ubuntu -- docker exec server psql -U admin -d securelint`
-  - ⚠️ Quoting SQL dari PowerShell ke `wsl ... psql -c` rawan hilang → pakai pipe stdin: `$sql | wsl -d Ubuntu -- docker exec -i server psql -U admin -d securelint`
+  - ⚠️ Quoting SQL dari PowerShell ke `wsl ... psql -c` rawan hilang → pipe stdin: `$sql | wsl -d Ubuntu -- docker exec -i server psql -U admin -d securelint`
 - Perintah shell Windows: hindari `Start-Process npx` (harus `npx.cmd`); lebih baik pakai background shell
-- Bukan git repo (belum `git init`)
+- **API key AI BELUM diisi** (`server/.env` masih `""`) → provider openai/claude selalu fallback ke mock; **UI sekarang default `mock` eksplisit** (AI dummy) untuk test. User tinggal isi key + pilih OpenAI/Claude untuk LLM asli (restart backend setelah edit `.env`)
+- **Dev satu perintah (root):** `npm install` (sekali) lalu **`npm run dev`** → backend (`tsx watch`, :4000) + frontend (Vite, :5173) bersamaan via `concurrently`, log tag `[server]`/`[client]`, Ctrl+C matikan keduanya. Alternatif: `npm run dev:server` / `npm run dev:client`
 - Server dev: `npm run dev` (tsx watch) di `server/`, port 4000
 - Frontend dev: `npm run dev` (Vite) di `client/`, port 5173 — proxy `/api` → `127.0.0.1:4000`
-- Kedua server dev bisa jalan bersamaan (2 terminal/background shell)
+- ⚠️ Vite listen **hanya di `::1` (IPv6)** → buka `http://localhost:5173`, `http://127.0.0.1:5173` GAGAL (sudah diuji)
+- ⚠️ Server restart mematikan background shell — start ulang 2 shell (server + client) kalau mati
+- ⚠️ `prisma generate` EPERM kalau backend masih jalan (query engine DLL dikunci) → stop backend dulu
 
 ---
 
-## 9. TODO Berikutnya
+## 9. Status TODO — SEMUA TASK MVP SELESAI ✅
 
-1. ~~Install Docker + migrate + test end-to-end~~ ✅ **SELESAI** (pakai container existing `server` di WSL Ubuntu)
-2. ~~Scaffold frontend (`/client`)~~ ✅ **SELESAI** — React 19 + Vite 7 + Tailwind 4 + Monaco 4.7 + Recharts 3
-3. ~~Dashboard: score gauge, OWASP pie, finding per-baris, panel diff `suggestedFix`~~ ✅ **SELESAI** (diff pakai split-view buatan sendiri, BUKAN `react-diff-view` — cukup karena `suggestedFix` = replacement per-snippet)
-4. ~~Riwayat audit (`GET /api/audits`)~~ ✅ **SELESAI** — `HistoryList.tsx`, klik → muat session + isi ulang editor
-5. Opsional / sisa:
-   - Verifikasi visual di browser (tool browser OpenCode belum tersedia di sesi ini — buka manual `http://localhost:5173`)
-   - Implementasi provider OpenAI/Claude asli (tinggal ganti mapping di `server/src/services/ai/index.ts`)
-   - `git init`
-   - Tangani vulnerabilities npm audit: server 3 high, client 1 low + 1 moderate (dompurify via monaco-editor, belum ada patch)
-   - Migrasi seed config Prisma ke `prisma.config.ts`
-   - Code-split bundle client (build 594 kB — Monaco + Recharts)
+1. ~~Install Docker + migrate + test end-to-end~~ ✅
+2. ~~Scaffold frontend (`/client`)~~ ✅
+3. ~~Dashboard: score gauge, OWASP pie, finding per-baris, panel diff `suggestedFix`~~ ✅ (split-view buatan sendiri, tanpa `react-diff-view`)
+4. ~~Riwayat audit (`GET /api/audits`)~~ ✅
+5. ~~Provider OpenAI/Claude asli + fallback~~ ✅
+6. ~~`git init` + commit~~ ✅ (`b166398`)
+7. ~~Tangani npm audit (server 3 high + client 1 low + 1 moderate)~~ ✅ **0 vulnerabilities**
+8. ~~Migrasi seed config Prisma ke `prisma.config.ts`~~ ✅
+9. ~~Code-split bundle client~~ ✅ (index 226 kB)
+
+**Backlog / langkah lanjutan (di luar MVP):**
+- **Sudah selesai:** dev satu perintah `npm run dev` (root, via concurrently)
+- Verifikasi visual manual di `http://localhost:5173`
+- **Ditunda user:** isi `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` di `server/.env` → restart backend → audit LLM asli (kode provider sudah siap; sementara test pakai `mock`)
+- `git push` ke remote (buat repo GitHub/GitLab)
+- Opsional: seed sample data, tests (vitest/jest), rate limiting, auth

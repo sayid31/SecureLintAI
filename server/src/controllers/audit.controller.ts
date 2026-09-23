@@ -5,7 +5,7 @@ import { getAuditById, listAudits, runAudit } from "../services/audit.service";
 const auditBodySchema = z.object({
   code: z.string().min(1, "code is required").max(100_000, "code too large"),
   language: z.enum(["javascript", "typescript", "python"]),
-  provider: z.enum(["openai", "claude"]),
+  provider: z.enum(["openai", "claude", "mock"]),
 });
 
 /** POST /api/audit — run an audit and persist the session. */

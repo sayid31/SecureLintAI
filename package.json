@@ -1,0 +1,16 @@
+{
+  "name": "securelint-ai",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SecureLint AI - root dev runner (backend + frontend dalam satu perintah)",
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green --kill-others-on-fail \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "typecheck": "npm --prefix server exec tsc -- --noEmit && npm --prefix client run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  }
+}

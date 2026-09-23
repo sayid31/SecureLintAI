@@ -1,7 +1,7 @@
 /** Tipe & client untuk API SecureLint AI (lihat server/src/services/audit.service.ts). */
 
 export type Language = "javascript" | "typescript" | "python";
-export type Provider = "openai" | "claude";
+export type Provider = "openai" | "claude" | "mock";
 export type Severity = "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
 
 export interface Vulnerability {

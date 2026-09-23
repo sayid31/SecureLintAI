@@ -35,7 +35,7 @@
 | npm audit | **Pakai `overrides`** — `deepmerge-ts ^8.0.2` (server) & `dompurify ^3.4.15` (client); keduanya dipin exact oleh parent → `npm audit fix` tidak bisa menembus. **Hasil: 0 vulnerabilities kedua package** ✅ (Prisma CLI divalidasi tetap jalan setelah override) |
 | Prisma config | **`server/prisma.config.ts`** menggantikan `package.json#prisma` (deprecated Prisma 7). ⚠️ Efek samping: Prisma berhenti auto-load `.env` → `import "dotenv/config"` ditambahkan di config & di `src/index.ts` |
 | Env runtime | Server **wajib `dotenv`** (dulu tidak ada → API key tak terbaca) |
-| Version control | **`git init` SUDAH JALAN** — commit pertama `b166398` (39 file). `.env`/`node_modules`/`dist` ter-ignore |
+| Version control | **`git init` SUDAH JALAN** — commit pertama `b166398` (39 file). `.env`/`node_modules`/`dist` ter-ignore. **Remote: `origin` → https://github.com/sayid31/SecureLintAI.git — SUDAH DI-PUSH** (branch `master`, auth via Git Credential Manager) |
 | Bahasa respons user | User berkomunikasi dalam **Bahasa Indonesia** — balas dalam Bahasa Indonesia |
 
 ---
@@ -161,7 +161,7 @@ LLM asli memakai prompt di `llm.shared.ts` (ruleId `AI-xxx`, kategori OWASP 2021
 **Sisa known issues (minor):**
 - ⚠️ Belum verifikasi visual di browser (tool browser OpenCode tidak connect — buka manual `http://localhost:5173`)
 - ⚠️ `docker-compose.yml` sudah dihapus (keputusan user: 1 container banyak database)
-- ⚠️ Belum `git push` ke remote (belum ada remote)
+- ~~⚠️ Belum `git push` ke remote~~ ✅ **SUDAH PUSH** — `origin/master` (repo `sayid31/SecureLintAI`)
 
 ---
 
@@ -169,7 +169,7 @@ LLM asli memakai prompt di `llm.shared.ts` (ruleId `AI-xxx`, kategori OWASP 2021
 
 - **OS:** Windows (PowerShell), path kerja: `C:\Users\Muhamad Sayid\Documents\SecureLint AI`
 - Node v22.18.0, npm 10.9.3
-- **Git:** repo aktif, config global `Sayid_Dev31 <muhamadsayidamanulloh@gmail.com>`, commit `b166398`
+- **Git:** repo aktif, config global `Sayid_Dev31 <muhamadsayidamanulloh@gmail.com>`; remote `origin` = `https://github.com/sayid31/SecureLintAI.git` (sudah push, branch `master`)
 - **Docker: terinstall DI WSL Ubuntu** (bukan Docker Desktop) — akses via `wsl -d Ubuntu -- docker ...`
   - Container `server` = postgres:15-alpine, port `0.0.0.0:5432`, restart `unless-stopped`, volume `server_pgdata`
   - Kredensial: user `admin` / password `supersecretpassword`
@@ -203,5 +203,5 @@ LLM asli memakai prompt di `llm.shared.ts` (ruleId `AI-xxx`, kategori OWASP 2021
 - **Sudah selesai:** dev satu perintah `npm run dev` (root, via concurrently)
 - Verifikasi visual manual di `http://localhost:5173`
 - **Ditunda user:** isi `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` di `server/.env` → restart backend → audit LLM asli (kode provider sudah siap; sementara test pakai `mock`)
-- `git push` ke remote (buat repo GitHub/GitLab)
+- ✅ **`git push` ke https://github.com/sayid31/SecureLintAI.git** (branch `master`, commit `0a025c8`)
 - Opsional: seed sample data, tests (vitest/jest), rate limiting, auth
